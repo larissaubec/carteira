@@ -1,0 +1,24 @@
+name: carteira_app
+description: Carteira, o app de finanças pessoais do curso de Formação Mobile.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  carteira_core:
+    path: ../../packages/core
+  carteira_design_system:
+    path: ../../packages/design_system
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

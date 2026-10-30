@@ -1,0 +1,33 @@
+/// Domain, data and formatting of the Carteira app. Pure Dart.
+library;
+
+export 'src/api/api_client.dart';
+export 'src/format/date_format.dart';
+export 'src/format/date_time_x.dart';
+export 'src/format/group_by.dart';
+export 'src/format/money_formatter.dart';
+export 'src/format/parse_list.dart';
+export 'src/format/validators.dart';
+export 'src/models/currency.dart';
+export 'src/models/json.dart';
+export 'src/models/page.dart';
+export 'src/models/session.dart';
+export 'src/models/summary.dart';
+export 'src/models/transaction.dart';
+export 'src/models/transaction_filter.dart';
+export 'src/models/transaction_type.dart';
+export 'src/models/user.dart';
+export 'src/repositories/auth_repository.dart';
+export 'src/repositories/in_memory/in_memory_auth_repository.dart';
+export 'src/repositories/in_memory/in_memory_transaction_repository.dart';
+export 'src/repositories/in_memory/in_memory_user_repository.dart';
+export 'src/repositories/in_memory/sample_data.dart';
+export 'src/repositories/remote/remote_auth_repository.dart';
+export 'src/repositories/remote/remote_transaction_repository.dart';
+export 'src/repositories/remote/remote_user_repository.dart';
+export 'src/repositories/transaction_repository.dart';
+export 'src/repositories/user_repository.dart';
+export 'src/result/app_error.dart';
+export 'src/result/result.dart';
+export 'src/storage/in_memory_session_storage.dart';
+export 'src/storage/session_storage.dart';
