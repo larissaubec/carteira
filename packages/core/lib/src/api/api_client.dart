@@ -1,8 +1,4 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 
 import '../models/json.dart';
 import '../result/app_error.dart';
@@ -10,102 +6,80 @@ import '../result/result.dart';
 
 /// Thin HTTP client that speaks the API contract.
 ///
-/// It knows three things: where the server is, which token to send and how to
-/// turn an HTTP response into a [Result]. It knows nothing about transactions
-/// or users; that is the job of the remote repositories.
+/// `dio` does the transport: base URL, timeouts and JSON in both directions.
+/// This class adds what is ours: the token on every request and the mapping of
+/// every outcome to a [Result]. It knows nothing about transactions or users;
+/// that is the job of the remote repositories.
 class ApiClient {
+  /// [headers] go on every request; the demos use them to send `X-Fail` and
+  /// `X-Delay-Ms`. [adapter] replaces the network in tests.
   ApiClient({
     required String baseUrl,
-    http.Client? client,
-    this.timeout = const Duration(seconds: 10),
-  }) : _baseUrl = Uri.parse(baseUrl),
-       _client = client ?? http.Client();
+    Duration timeout = const Duration(seconds: 10),
+    Map<String, String> headers = const {},
+    HttpClientAdapter? adapter,
+  }) : _dio = Dio(
+         BaseOptions(
+           baseUrl: baseUrl,
+           connectTimeout: timeout,
+           receiveTimeout: timeout,
+           headers: {'Accept': 'application/json', ...headers},
+         ),
+       ) {
+    if (adapter != null) _dio.httpClientAdapter = adapter;
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (token != null) options.headers['Authorization'] = 'Bearer $token';
+          handler.next(options);
+        },
+      ),
+    );
+  }
 
-  final Uri _baseUrl;
-  final http.Client _client;
-  final Duration timeout;
+  final Dio _dio;
 
   /// Bearer token sent on every request when set.
   String? token;
 
-  Future<Result<Object?>> get(
-    String path, {
-    Map<String, String>? query,
-    Map<String, String>? headers,
-  }) => _send('GET', path, query: query, headers: headers);
+  Future<Result<Object?>> get(String path, {Map<String, String>? query}) =>
+      _send(() => _dio.get(path, queryParameters: query));
 
-  Future<Result<Object?>> post(
-    String path, {
-    Object? body,
-    Map<String, String>? headers,
-  }) => _send('POST', path, body: body, headers: headers);
+  Future<Result<Object?>> post(String path, {Object? body}) =>
+      _send(() => _dio.post(path, data: body));
 
-  Future<Result<Object?>> put(
-    String path, {
-    Object? body,
-    Map<String, String>? headers,
-  }) => _send('PUT', path, body: body, headers: headers);
+  Future<Result<Object?>> put(String path, {Object? body}) =>
+      _send(() => _dio.put(path, data: body));
 
-  Future<Result<Object?>> patch(
-    String path, {
-    Object? body,
-    Map<String, String>? headers,
-  }) => _send('PATCH', path, body: body, headers: headers);
+  Future<Result<Object?>> delete(String path) => _send(() => _dio.delete(path));
 
-  Future<Result<Object?>> delete(String path, {Map<String, String>? headers}) =>
-      _send('DELETE', path, headers: headers);
+  void close() => _dio.close();
 
-  void close() => _client.close();
+  /// A 2xx becomes [Ok] with the decoded body; everything else, including
+  /// the exceptions `dio` throws, becomes [Failure].
+  Future<Result<Object?>> _send(Future<Response<Object?>> Function() request) =>
+      Result.guard(() async {
+        final data = (await request()).data;
+        return data == '' ? null : data;
+      }, onError: fromException);
 
-  Future<Result<Object?>> _send(
-    String method,
-    String path, {
-    Map<String, String>? query,
-    Object? body,
-    Map<String, String>? headers,
-  }) async {
-    final uri = _baseUrl.replace(
-      path: '${_baseUrl.path}$path'.replaceAll('//', '/'),
-      queryParameters: query == null || query.isEmpty ? null : query,
-    );
-    final request = http.Request(method, uri);
-    request.headers['Accept'] = 'application/json';
-    if (token != null) request.headers['Authorization'] = 'Bearer $token';
-    if (headers != null) request.headers.addAll(headers);
-    if (body != null) {
-      request.headers['Content-Type'] = 'application/json; charset=utf-8';
-      request.body = jsonEncode(body);
-    }
-
-    try {
-      final streamed = await _client.send(request).timeout(timeout);
-      final response = await http.Response.fromStream(streamed);
-      return _decode(response);
-    } on TimeoutException {
-      return const Failure(TimeoutError());
-    } on SocketException {
-      return const Failure(NetworkError());
-    } on http.ClientException {
-      return const Failure(NetworkError());
-    } catch (e) {
-      return Failure(UnknownError(e));
-    }
-  }
-
-  Result<Object?> _decode(http.Response response) {
-    final status = response.statusCode;
-    final text = utf8.decode(response.bodyBytes);
-    Object? decoded;
-    if (text.isNotEmpty) {
-      try {
-        decoded = jsonDecode(text);
-      } on FormatException catch (e) {
-        return Failure(UnknownError(e));
-      }
-    }
-    if (status >= 200 && status < 300) return Ok(decoded);
-    return Failure(mapError(status, decoded));
-  }
+  /// Maps what `dio` throws to an [AppError].
+  static AppError fromException(Object error) => switch (error) {
+    DioException(
+      type: DioExceptionType.badResponse,
+      response: Response(:final statusCode?, :final data),
+    ) =>
+      mapError(statusCode, data),
+    DioException(
+      type: DioExceptionType.connectionTimeout ||
+          DioExceptionType.sendTimeout ||
+          DioExceptionType.receiveTimeout,
+    ) =>
+      const TimeoutError(),
+    DioException(type: DioExceptionType.connectionError) =>
+      const NetworkError(),
+    _ => UnknownError(error),
+  };
 
   /// Maps a status code and the contract's error body to an [AppError].
   static AppError mapError(int status, Object? body) {

@@ -11,9 +11,15 @@ lib/src/result/         Result<T> (Ok / Failure) e AppError (hierarquia fechada)
 lib/src/format/         MoneyFormatter (strategy por moeda), datas, validadores,
                         parseList, groupBy, extensão DateTimeX
 lib/src/repositories/   interfaces + implementações in_memory/ e remote/
-lib/src/api/            ApiClient (http) que fala o contrato de docs/api-contract.md
+lib/src/api/            ApiClient (dio) que fala o contrato de docs/api-contract.md
 lib/src/storage/        SessionStorage (interface) e InMemorySessionStorage
 ```
+
+Por que `dio` e não `http`: o `dio` já traz URL base, timeouts, JSON nos dois
+sentidos, interceptors e um único `DioException` tipado para toda falha de
+transporte. O `ApiClient` fica só com o que é do app: o token e o mapeamento de
+cada resultado para `Result`/`AppError`. Nos testes, um `HttpClientAdapter`
+falso substitui a rede sem pacote extra.
 
 Regras: repositórios devolvem `Future<Result<T>>` e nunca lançam; modelos são
 imutáveis com `copyWith`; `fromJson` tolera campo ausente ou nulo.

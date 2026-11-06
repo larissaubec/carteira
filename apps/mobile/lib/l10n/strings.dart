@@ -13,10 +13,19 @@ abstract final class Strings {
   static const signOutConfirm = 'Deseja sair da sua conta?';
   static const restoringSession = 'Carregando sua carteira…';
 
+  static const sessionExpired = 'Sua sessão expirou. Entre novamente.';
+
   // Navigation
   static const tabTransactions = 'Lançamentos';
   static const tabProfile = 'Perfil';
   static const theme = 'Tema';
+  static const themeLight = 'Mudar para o tema claro';
+  static const themeDark = 'Mudar para o tema escuro';
+
+  // Home
+  static const byCategory = 'Por categoria';
+  static const noExpenses = 'Nenhuma despesa neste mês.';
+  static const comingSoon = 'Disponível nos próximos capítulos.';
 
   // Transactions
   static const monthBalance = 'Saldo do mês';
@@ -47,6 +56,7 @@ abstract final class Strings {
   static const undo = 'Desfazer';
   static const saved = 'Salvo.';
   static const loadMoreError = 'Não foi possível carregar mais itens.';
+  static const loadMore = 'Carregar mais';
 
   // Profile
   static const profileTitle = 'Perfil';

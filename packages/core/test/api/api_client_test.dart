@@ -1,72 +1,94 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:carteira_core/carteira_core.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
+import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 
-http.Response _json(int status, Object? body) => http.Response(
-  body == null ? '' : jsonEncode(body),
+/// Replaces the network: every request goes to [handler].
+class _Adapter implements HttpClientAdapter {
+  _Adapter(this.handler);
+
+  final FutureOr<ResponseBody> Function(RequestOptions options) handler;
+  RequestOptions? captured;
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    captured = options;
+    return handler(options);
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
+ResponseBody _text(int status, String text) => ResponseBody.fromString(
+  text,
   status,
-  headers: {'content-type': 'application/json; charset=utf-8'},
+  headers: {
+    Headers.contentTypeHeader: [Headers.jsonContentType],
+  },
 );
 
-http.Response _error(int status, String code, {Map<String, String>? fields}) =>
+ResponseBody _json(int status, Object? body) =>
+    _text(status, body == null ? '' : jsonEncode(body));
+
+ResponseBody _error(int status, String code, {Map<String, String>? fields}) =>
     _json(status, {
       'error': {'code': code, 'message': 'msg $code', 'fields': ?fields},
     });
 
-void main() {
-  late http.Request? captured;
+DioException _dioError(DioExceptionType type) =>
+    DioException(requestOptions: RequestOptions(), type: type);
 
-  ApiClient client(FutureOr<http.Response> Function(http.Request) handler) {
-    captured = null;
-    return ApiClient(
-      baseUrl: 'http://localhost:8080',
-      timeout: const Duration(milliseconds: 100),
-      client: MockClient((request) async {
-        captured = request;
-        return handler(request);
-      }),
-    );
+void main() {
+  late _Adapter adapter;
+
+  ApiClient client(
+    FutureOr<ResponseBody> Function(RequestOptions) handler, {
+    String baseUrl = 'http://localhost:8080',
+    Map<String, String> headers = const {},
+  }) {
+    adapter = _Adapter(handler);
+    return ApiClient(baseUrl: baseUrl, headers: headers, adapter: adapter);
   }
 
   group('request building', () {
-    test('sends method, path, query, token and JSON body', () async {
-      final api = client((_) => _json(200, {'ok': true}))..token = 'tok_1';
-      await api.post(
-        '/transactions',
-        body: {'a': 1},
+    test('sends method, path, token, fixed headers and JSON body', () async {
+      final api = client(
+        (_) => _json(200, {'ok': true}),
         headers: {'X-Delay-Ms': '10'},
-      );
-      expect(captured!.method, 'POST');
-      expect(captured!.url.toString(), 'http://localhost:8080/transactions');
-      expect(captured!.headers['Authorization'], 'Bearer tok_1');
-      expect(captured!.headers['X-Delay-Ms'], '10');
-      expect(captured!.headers['Content-Type'], contains('application/json'));
-      expect(jsonDecode(captured!.body), {'a': 1});
+      )..token = 'tok_1';
+      await api.post('/transactions', body: {'a': 1});
+      final sent = adapter.captured!;
+      expect(sent.method, 'POST');
+      expect(sent.uri.toString(), 'http://localhost:8080/transactions');
+      expect(sent.headers['Authorization'], 'Bearer tok_1');
+      expect(sent.headers['X-Delay-Ms'], '10');
+      expect(sent.contentType, contains('application/json'));
+      expect(sent.data, {'a': 1});
     });
 
     test('omits the token when not set and encodes the query', () async {
       final api = client((_) => _json(200, []));
       await api.get('/transactions', query: {'month': '2026-09', 'q': 'a b'});
-      expect(captured!.headers.containsKey('Authorization'), isFalse);
-      expect(captured!.url.queryParameters, {'month': '2026-09', 'q': 'a b'});
+      final sent = adapter.captured!;
+      expect(sent.headers.containsKey('Authorization'), isFalse);
+      expect(sent.uri.queryParameters, {'month': '2026-09', 'q': 'a b'});
     });
 
     test('supports a base URL with a path prefix', () async {
-      captured = null;
-      final api = ApiClient(
+      final api = client(
+        (_) => _json(200, null),
         baseUrl: 'https://example.com/api/v1',
-        client: MockClient((request) async {
-          captured = request;
-          return _json(200, null);
-        }),
       );
       await api.get('/me');
-      expect(captured!.url.toString(), 'https://example.com/api/v1/me');
+      expect(adapter.captured!.uri.toString(), 'https://example.com/api/v1/me');
     });
   });
 
@@ -82,16 +104,14 @@ void main() {
     });
 
     test('204 returns null', () async {
-      final api = client((_) => http.Response('', 204));
+      final api = client((_) => _text(204, ''));
       expect(await api.delete('/x'), const Ok<Object?>(null));
     });
 
-    test('put and patch are sent', () async {
+    test('put is sent', () async {
       final api = client((_) => _json(200, {}));
       await api.put('/x', body: {});
-      expect(captured!.method, 'PUT');
-      await api.patch('/x', body: {});
-      expect(captured!.method, 'PATCH');
+      expect(adapter.captured!.method, 'PUT');
     });
   });
 
@@ -143,29 +163,30 @@ void main() {
     });
 
     test('other statuses become UnknownError', () async {
-      final api = client((_) => http.Response('teapot', 418));
+      final api = client((_) => ResponseBody.fromString('teapot', 418));
       expect((await api.get('/x')).errorOrNull, isA<UnknownError>());
     });
 
     test('malformed JSON becomes UnknownError', () async {
-      final api = client((_) => http.Response('{not json', 200));
+      final api = client((_) => _text(200, '{not json'));
       expect((await api.get('/x')).errorOrNull, isA<UnknownError>());
     });
 
-    test('timeout becomes TimeoutError', () async {
+    test('timeouts become TimeoutError', () async {
+      for (final type in [
+        DioExceptionType.connectionTimeout,
+        DioExceptionType.sendTimeout,
+        DioExceptionType.receiveTimeout,
+      ]) {
+        final api = client((_) => throw _dioError(type));
+        expect(await api.get('/x'), const Failure<Object?>(TimeoutError()));
+      }
+    });
+
+    test('a connection error becomes NetworkError', () async {
       final api = client(
-        (_) => Future.delayed(const Duration(seconds: 1), () => _json(200, {})),
+        (_) => throw _dioError(DioExceptionType.connectionError),
       );
-      expect(await api.get('/x'), const Failure<Object?>(TimeoutError()));
-    });
-
-    test('SocketException becomes NetworkError', () async {
-      final api = client((_) => throw const SocketException('refused'));
-      expect(await api.get('/x'), const Failure<Object?>(NetworkError()));
-    });
-
-    test('ClientException becomes NetworkError', () async {
-      final api = client((_) => throw http.ClientException('closed'));
       expect(await api.get('/x'), const Failure<Object?>(NetworkError()));
     });
   });
