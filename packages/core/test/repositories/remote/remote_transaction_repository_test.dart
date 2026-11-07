@@ -18,10 +18,7 @@ void main() {
   setUp(() {
     server = FakeServer();
     repository = RemoteTransactionRepository(
-      client: ApiClient(
-        baseUrl: 'http://localhost:8080',
-        client: server.client,
-      ),
+      client: ApiClient(baseUrl: 'http://localhost:8080', adapter: server),
     );
   });
 

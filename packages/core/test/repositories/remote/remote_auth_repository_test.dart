@@ -11,7 +11,7 @@ void main() {
 
   setUp(() {
     server = FakeServer();
-    client = ApiClient(baseUrl: 'http://localhost:8080', client: server.client);
+    client = ApiClient(baseUrl: 'http://localhost:8080', adapter: server);
     storage = InMemorySessionStorage();
     repository = RemoteAuthRepository(client: client, storage: storage);
   });

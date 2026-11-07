@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 
-/// Shows every token on screen. Built with plain Material widgets only: the
-/// design system has no components yet.
 class TokensPage extends StatelessWidget {
   const TokensPage({super.key});
 
@@ -12,7 +10,6 @@ class TokensPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final semantic = context.semanticColors;
-    final text = Theme.of(context).textTheme;
     final swatches = <(String, Color)>[
       ('primary', scheme.primary),
       ('primaryContainer', scheme.primaryContainer),
@@ -25,6 +22,7 @@ class TokensPage extends StatelessWidget {
       ('warning', semantic.warning),
       ('muted', semantic.muted),
     ];
+    final text = Theme.of(context).textTheme;
     final styles = <(String, TextStyle?)>[
       ('displayLarge', text.displayLarge),
       ('headlineMedium', text.headlineMedium),
@@ -35,30 +33,13 @@ class TokensPage extends StatelessWidget {
       ('bodySmall', text.bodySmall),
       ('labelSmall', text.labelSmall),
     ];
-    final spacings = <(String, double)>[
-      ('xs', AppSpacing.xs),
-      ('sm', AppSpacing.sm),
-      ('md', AppSpacing.md),
-      ('lg', AppSpacing.lg),
-      ('xl', AppSpacing.xl),
-      ('xxl', AppSpacing.xxl),
-    ];
-    final radii = <(String, BorderRadius)>[
-      ('sm', AppRadius.smAll),
-      ('md', AppRadius.mdAll),
-      ('lg', AppRadius.lgAll),
-      ('pill', AppRadius.pillAll),
-    ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tokens'),
-        actions: const [ThemeModeButton()],
-      ),
+    return AppScaffold(
+      title: 'Tokens',
+      actions: const [ThemeModeButton()],
       body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.screen),
         children: [
-          _Heading('Cores', style: text.labelSmall),
+          const SectionHeader(title: 'Cores'),
           Wrap(
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.sm,
@@ -77,21 +58,28 @@ class TokensPage extends StatelessWidget {
                           border: Border.all(color: scheme.outline),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.xs),
+                      const Gap.xs(),
                       Text(name, style: text.bodySmall),
                     ],
                   ),
                 ),
             ],
           ),
-          _Heading('Tipografia', style: text.labelSmall),
+          const SectionHeader(title: 'Tipografia'),
           for (final (name, style) in styles)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: Text(name, style: style),
             ),
-          _Heading('Espaçamento', style: text.labelSmall),
-          for (final (name, value) in spacings)
+          const SectionHeader(title: 'Espaçamento'),
+          for (final (name, value) in [
+            ('xs', AppSpacing.xs),
+            ('sm', AppSpacing.sm),
+            ('md', AppSpacing.md),
+            ('lg', AppSpacing.lg),
+            ('xl', AppSpacing.xl),
+            ('xxl', AppSpacing.xxl),
+          ])
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: Row(
@@ -102,15 +90,20 @@ class TokensPage extends StatelessWidget {
                     height: 12,
                     color: scheme.primary,
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  const Gap.sm(),
                   Text('${value.toInt()} pt', style: text.bodySmall),
                 ],
               ),
             ),
-          _Heading('Raio', style: text.labelSmall),
+          const SectionHeader(title: 'Raio'),
           Row(
             children: [
-              for (final (name, radius) in radii) ...[
+              for (final (name, radius) in [
+                ('sm', AppRadius.smAll),
+                ('md', AppRadius.mdAll),
+                ('lg', AppRadius.lgAll),
+                ('pill', AppRadius.pillAll),
+              ]) ...[
                 Container(
                   width: 56,
                   height: 40,
@@ -121,30 +114,12 @@ class TokensPage extends StatelessWidget {
                   ),
                   child: Text(name, style: text.bodySmall),
                 ),
-                const SizedBox(width: AppSpacing.sm),
+                const Gap.sm(),
               ],
             ],
           ),
-          const SizedBox(height: AppSpacing.xxl),
+          const Gap.xxl(),
         ],
-      ),
-    );
-  }
-}
-
-class _Heading extends StatelessWidget {
-  const _Heading(this.title, {this.style});
-
-  final String title;
-  final TextStyle? style;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.xl, bottom: AppSpacing.sm),
-      child: Text(
-        title.toUpperCase(),
-        style: style?.copyWith(color: context.semanticColors.muted),
       ),
     );
   }
